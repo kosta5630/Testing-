@@ -127,6 +127,7 @@ local Toggle = DefenseTab:CreateToggle({
     CurrentValue = false,
     Flag = "AutoGuard",
     Callback = function(Value)
+        if Value then
             loadstring(game:HttpGet("https://raw.githubusercontent.com/kosta5630/RH2/refs/heads/main/Auto%20Guard"))();
         end
     end,
