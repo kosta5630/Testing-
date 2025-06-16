@@ -1,0 +1,113 @@
+local Player = game.Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+
+local Values = Player:WaitForChild("Backpack"):WaitForChild("PlayerValues")
+local PlayerEvents = game:GetService("ReplicatedStorage"):WaitForChild("PlayerEvents")
+
+local QuickDrawList = {
+    "Bronze",
+    "Silver",
+    "Gold",
+    "HoF"
+}
+
+local QuickDrawTimings = {
+    ["Bronze"] = 0,
+    ["Silver"] = 0,
+    ["Gold"] = 0,
+    ["HoF"] = 0,
+}
+
+local ShotTypes = {
+    ["Standing Shot"] = 0.5812,
+    ["Moving Shot"] = 0.6934424,
+    ["Close Floater"] = 0.3575,
+    ["Floater"] = 0.3702,
+    ["Layup"] = 0.4603,
+    ["Standing Layup"] = 0.459,
+    ["Reverse Layup"] = 0.6287178,
+    ["Moving Dunk"] = 0.511,
+    ["Standing Dunk"] = 0.467,
+    ["Close Post Fade"] = 0.93,
+    ["Post Fade"] = 0.571,
+}
+
+local QuickDrawTier
+
+task.spawn(function()
+    task.wait(0.1)
+    for _, v in next, getgc(true) do
+        if type(v) == "table" then
+            for i2, v2 in pairs(v) do
+                if i2 == "Badges" or v2 == "Badges" then
+                    if type(v2) == "table" then
+                        for i3, v3 in pairs(v2) do
+                            if i3 == "QuickDraw" and table.find(QuickDrawList, v3) then
+                                QuickDrawTier = v3
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+function AdjustOnPing(Timing, ShotType)
+    if Timing then
+        local AdjustedTiming = math.max(Timing - (game:GetService('Stats').Network.ServerStatsItem['Data Ping']:GetValue() / 1000), 0)
+        if QuickDrawTier ~= "Locked" and ShotType == "Standing Shot" and QuickDrawTier ~= 0 and QuickDrawTier then
+            AdjustedTiming -= QuickDrawTimings[QuickDrawTier]
+        end
+        return AdjustedTiming
+    end
+end
+
+local DunkType, ShotType, namecallHook
+namecallHook = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = { ... }
+    if method == "FireServer" and self.Name == "Shooting" then
+        if type(args[3]) == "string" then
+            ShotType = args[3]
+        else
+            DunkType = args[2]
+        end
+        return namecallHook(self, unpack(args))
+    end
+    return namecallHook(self, ...)
+end))
+
+-- Create a holder so we can disconnect it later
+_G.AutoTimerConnection = _G.AutoTimerConnection or nil
+
+-- Disconnect existing connection if toggling off
+if not _G.ShootingEnabled and _G.AutoTimerConnection then
+    _G.AutoTimerConnection:Disconnect()
+    _G.AutoTimerConnection = nil
+end
+
+-- If enabled, create a connection
+if _G.ShootingEnabled and not _G.AutoTimerConnection then
+    _G.AutoTimerConnection = Values.HandValue.Changed:Connect(function()
+        if not _G.ShootingEnabled then return end
+
+        if Values.HandValue.Value == "Shooting" then
+            local Timing = AdjustOnPing(ShotTypes[ShotType], ShotType)
+            if Timing then
+                task.wait(Timing)
+                if _G.ShootingEnabled then
+                    PlayerEvents.Shooting:FireServer(false, "Shooting", ShotType)
+                end
+            end
+        elseif Values.HandValue.Value == "Dunking" then
+            local Timing = AdjustOnPing(ShotTypes[DunkType], DunkType)
+            if Timing then
+                task.wait(Timing)
+                if _G.ShootingEnabled then
+                    PlayerEvents.Shooting:FireServer(false, DunkType, 1)
+                end
+            end
+        end
+    end)
+end
